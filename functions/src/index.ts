@@ -2,7 +2,7 @@ import * as functions from "firebase-functions";
 import axios from 'axios';
 const moment = require('moment');
 const operations = require('./operations');
-const { sendNotification } = require('./notify');
+const { triggerNotification } = require('./notify');
 
 interface cowinCenter {
     center_id: number;
@@ -25,11 +25,13 @@ interface cowinCenter {
 
     slots: string;
 }
-
-exports.CoWinCronJob = functions.region('asia-south1').pubsub.schedule('every minute').timeZone('Asia/Kolkata').onRun(async () => {
+const runtimeOpts = {
+    timeoutSeconds: 540,
+}
+exports.CoWinCronJob = functions.region('asia-south1').runWith(runtimeOpts).pubsub.schedule('every 10 minutes').timeZone('Asia/Kolkata').onRun(async () => {
     const now = moment().format('DD-MM-YYYY');
-    const district_id = 265;
-
+    // const district_id = 265; // urban
+    const district_id = 294; // BBMP
     const headers = {
         'Accept': 'application/json',
         'Accept-Language': 'en_US',
@@ -44,7 +46,8 @@ exports.CoWinCronJob = functions.region('asia-south1').pubsub.schedule('every mi
         let sessionDetailsObj: any = {};
 
         const centers = data.centers.filter((a: any) => a.sessions.some((b: any) => b.available_capacity))
-        let DB_Data = await operations.FetchFromDB();
+        let DB_Data = await operations.FetchFromDB() || {};
+        const messagesArr = [];
 
         for (const center of centers) {
             let messageData = <cowinCenter>{};
@@ -54,11 +57,11 @@ exports.CoWinCronJob = functions.region('asia-south1').pubsub.schedule('every mi
             messageData.district_name = center.district_name;
             messageData.pincode = center.pincode;
             messageData.fee_type = center.fee_type;
-            messageData.vaccine_fees = center.vaccine_fees[0].fee || 'Null';
+            // messageData.vaccine_fees = center.vaccine_fees[0].fee || 'Null';
 
 
             for (const session of center.sessions) {
-                if (!session.available_capacity) {
+                if (!session.available_capacity || session.date !== now) {
                     continue;
                 }
                 messageData.session_id = session.session_id;
@@ -75,12 +78,15 @@ exports.CoWinCronJob = functions.region('asia-south1').pubsub.schedule('every mi
                 });
                 sessionDetailsObj[`${messageData.session_id}`] = session.available_capacity;
 
-                if (!DB_Data[messageData.session_id] || DB_Data[messageData.session_id] < session.available_capacity ){
-                    await sendNotification(messageData);
+                if (!DB_Data[messageData.session_id] || DB_Data[messageData.session_id] < session.available_capacity) {
+                    messagesArr.push(messageData)
                 }
             }
         }
         await operations.writeToDb(sessionDetailsObj);
+        if (messagesArr.length){
+            await triggerNotification(messagesArr);
+        }
         return
     })
         .catch((error) => {
