@@ -12,6 +12,7 @@ Click to recive notification for **[@cowin_bengaluru](https://t.me/cowin_bengalu
 
 #### Set envirnoment variables 
 ``firebase functions:config:set config.access_token_one="Access token 1" config.access_token_two="Access token 1" config.channel="channel_ID"``
+
 *Generate access tokens by using [@BotFather](https://t.me/botfather)*
 
 ####  Deploy
