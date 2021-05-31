@@ -24,6 +24,8 @@ interface cowinCenter {
     available_capacity_dose2: number;
 
     slots: string;
+    pattern: string
+
 }
 const runtimeOpts = {
     timeoutSeconds: 540,
@@ -79,6 +81,11 @@ exports.CoWinCronJob = functions.region('asia-south1').runWith(runtimeOpts).pubs
                 sessionDetailsObj[`${messageData.session_id}`] = session.available_capacity;
 
                 if (!DB_Data[messageData.session_id] || DB_Data[messageData.session_id] < session.available_capacity) {
+                    messageData.pattern ='\n';
+                    if(session.available_capacity_dose1)
+                        messageData.pattern+= session.min_age_limit+session.vaccine+center.pincode+'Dose1\n'
+                    if(session.available_capacity_dose2)
+                        messageData.pattern+= session.min_age_limit+session.vaccine+center.pincode+'Dose2'
                     messagesArr.push(messageData)
                 }
             }
