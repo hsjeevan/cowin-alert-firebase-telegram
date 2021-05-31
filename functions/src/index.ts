@@ -30,9 +30,12 @@ interface cowinCenter {
 const runtimeOpts = {
     timeoutSeconds: 540,
 }
-exports.CoWinCronJob = functions.region('asia-south1').runWith(runtimeOpts).pubsub.schedule('every 10 minutes').timeZone('Asia/Kolkata').onRun(async () => {
-    const now = moment().format('DD-MM-YYYY');
-    // const district_id = 265; // urban
+exports.CoWinCronJob = functions.region('asia-south1').runWith(runtimeOpts).pubsub.schedule('*/10 5-19 * * *').timeZone('Asia/Kolkata').onRun(async () => {
+    const now = moment();
+    let date = now.format('DD-MM-YYYY')
+    if (now.hour() >= 18 && now.minute() >= 30) {
+        date = moment(now, "DD-MM-YYYY").add(1, 'days').format('DD-MM-YYYY');
+    }    // const district_id = 265; // urban
     const district_id = 294; // BBMP
     const headers = {
         'Accept': 'application/json',
@@ -63,7 +66,7 @@ exports.CoWinCronJob = functions.region('asia-south1').runWith(runtimeOpts).pubs
 
 
             for (const session of center.sessions) {
-                if (!session.available_capacity || session.date !== now) {
+                if (!session.available_capacity || session.date !== date) {
                     continue;
                 }
                 messageData.session_id = session.session_id;
