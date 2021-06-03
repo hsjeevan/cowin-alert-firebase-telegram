@@ -30,7 +30,7 @@ interface cowinCenter {
 const runtimeOpts = {
     timeoutSeconds: 540,
 }
-exports.CoWinCronJob = functions.region('asia-south1').runWith(runtimeOpts).pubsub.schedule('*/10 5-19 * * *').timeZone('Asia/Kolkata').onRun(async () => {
+exports.CoWinCronJob = functions.region('asia-south1').runWith(runtimeOpts).pubsub.schedule('every 10 minutes from 05:00 to 19:00').timeZone('Asia/Kolkata').onRun(async () => {
     const now = moment();
     const minutes = now.minutes();
     const hour = now.hour();
