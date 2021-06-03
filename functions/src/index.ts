@@ -32,10 +32,15 @@ const runtimeOpts = {
 }
 exports.CoWinCronJob = functions.region('asia-south1').runWith(runtimeOpts).pubsub.schedule('*/10 5-19 * * *').timeZone('Asia/Kolkata').onRun(async () => {
     const now = moment();
-    let date = now.format('DD-MM-YYYY')
-    if (now.hour() >= 18 && now.minute() >= 30) {
-        date = moment(now, "DD-MM-YYYY").add(1, 'days').format('DD-MM-YYYY');
-    }    // const district_id = 265; // urban
+    const minutes = now.minutes();
+    const hour = now.hour();
+    let date = getDate(now, minutes);
+    if (hour >= 18 && minutes > 30 && date === now.format('DD-MM-YYYY')) {
+        return // Do not send today's notifications post 6.30PM
+    }
+
+
+    // const district_id = 265; // urban
     const district_id = 294; // BBMP
     const headers = {
         'Accept': 'application/json',
@@ -43,7 +48,7 @@ exports.CoWinCronJob = functions.region('asia-south1').runWith(runtimeOpts).pubs
         'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/83.0.4103.97 Safari/537.36',
     }
     // https://cdn-api.co-vin.in/api/v2/appointment/sessions/public/calendarByDistrict?district_id=265&date=29-05-2021
-    const url = `${'https://cdn-api.co-vin.in/api/v2/appointment/sessions/public/calendarByDistrict?district_id=' + district_id + '&date=' + now}`
+    const url = `${'https://cdn-api.co-vin.in/api/v2/appointment/sessions/public/calendarByDistrict?district_id=' + district_id + '&date=' + date}`
     await axios.get(url, {
         headers: headers
     }).then(async (response) => {
@@ -51,7 +56,7 @@ exports.CoWinCronJob = functions.region('asia-south1').runWith(runtimeOpts).pubs
         let sessionDetailsObj: any = {};
 
         const centers = data.centers.filter((a: any) => a.sessions.some((b: any) => b.available_capacity))
-        let DB_Data = await operations.FetchFromDB() || {};
+        let DB_Data = await operations.FetchFromDB(date) || {};
         const messagesArr = [];
 
         for (const center of centers) {
@@ -84,25 +89,46 @@ exports.CoWinCronJob = functions.region('asia-south1').runWith(runtimeOpts).pubs
                 sessionDetailsObj[`${messageData.session_id}`] = session.available_capacity;
 
                 if (!DB_Data[messageData.session_id] || DB_Data[messageData.session_id] < session.available_capacity) {
-                    messageData.pattern ='\n';
-                    if(session.available_capacity_dose1)
-                        messageData.pattern+= session.min_age_limit+session.vaccine+center.pincode+'Dose1\n'
-                    if(session.available_capacity_dose2)
-                        messageData.pattern+= session.min_age_limit+session.vaccine+center.pincode+'Dose2'
+                    messageData.pattern = '\n';
+                    if (session.available_capacity_dose1)
+                        messageData.pattern += session.min_age_limit + session.vaccine + center.pincode + 'Dose1\n'
+                    if (session.available_capacity_dose2)
+                        messageData.pattern += session.min_age_limit + session.vaccine + center.pincode + 'Dose2'
                     messagesArr.push(messageData)
                 }
             }
         }
-        await operations.writeToDb(sessionDetailsObj);
-        if (messagesArr.length){
+        await operations.writeToDb(sessionDetailsObj, date);
+        if (messagesArr.length) {
             await triggerNotification(messagesArr);
         }
         return
+    }).catch((error) => {
+        console.log(error);
+        return
     })
-        .catch((error) => {
-            console.log(error);
-            return
-        })
 });
 
 
+function getDate(now: any, minutes: any) {
+    let date = '';
+
+    switch (true) {
+        case ((minutes > 0 && minutes <= 10) || (minutes > 20 && minutes <= 30) || (minutes > 40 && minutes <= 50)):
+            date = now.format('DD-MM-YYYY');
+            break;
+        case (minutes <= 20):
+            date = moment(now, "DD-MM-YYYY").add(1, 'days').format('DD-MM-YYYY');
+            break;
+        case (minutes <= 40):
+            date = moment(now, "DD-MM-YYYY").add(2, 'days').format('DD-MM-YYYY');
+            break;
+        case (minutes <= 60):
+            date = moment(now, "DD-MM-YYYY").add(3, 'days').format('DD-MM-YYYY');
+            break;
+        default:
+            date = now.format('DD-MM-YYYY');
+            break;
+    }
+    return date;
+}
